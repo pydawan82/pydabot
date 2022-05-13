@@ -1,0 +1,10 @@
+com\pydawan\pydabot\Command.class
+com\pydawan\pydabot\Pair.class
+com\pydawan\pydabot\listeners\CommandListener.class
+com\pydawan\pydabot\Patterns.class
+com\pydawan\pydabot\listeners\SimpleCommandListener.class
+com\pydawan\pydabot\listeners\Pong.class
+com\pydawan\pydabot\Bot.class
+com\pydawan\pydabot\listeners\Moderator.class
+com\pydawan\pydabot\Severity.class
+com\pydawan\pydabot\App.class
