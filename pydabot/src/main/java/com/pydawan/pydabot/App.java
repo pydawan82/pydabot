@@ -1,51 +1,33 @@
 package com.pydawan.pydabot;
 
-import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Map;
 
-import org.pircbotx.exception.IrcException;
+import com.pydawan.pydabot.listeners.SimpleCommandListener;
 
-import net.sourceforge.argparse4j.ArgumentParsers;
-import net.sourceforge.argparse4j.inf.ArgumentParser;
-import net.sourceforge.argparse4j.inf.ArgumentParserException;
-import net.sourceforge.argparse4j.inf.Namespace;
+import org.json.JSONObject;
 
 /**
  * Hello world!
- *
  */
 public class App {
+    public static void main(String[] args) throws Exception {
+        JSONObject config = new JSONObject(Files.readString(Path.of("config.json")));
 
-    public static Namespace parse(ArgumentParser parser, String[] args) {
-        try {
-            return parser.parseArgs(args);
-        } catch (ArgumentParserException e) {
-            parser.handleError(e);
-            System.exit(1);
-            return null;
-        }
-    }
+        String hostname = config.getString("server");
+        int port = config.getInt("port");
+        String nickname = config.getString("name");
+        String password = config.getString("token");
 
-    public static void main(String[] args) {
-        /* Create an argument parser that takes a 'configuration' argument */
-        ArgumentParser parser = ArgumentParsers
-                .newFor("App")
-                .addHelp(true)
-                .build();
-        
-        /* Add a 'configuration' argument */
-        parser.addArgument("configuration")
-                .required(true)
-                .help("Configuration file");
-
-        
-        /* Parse the arguments */
-        Namespace namespace = parse(parser, args);
-        String configPath = namespace.getString("configuration");
-        
-        try(Bot bot = new Bot(configPath)){
-            bot.start();
-        } catch(IOException|IrcException e) {
-            e.printStackTrace();
-        }
+        Bot bot = new Bot(hostname, port, nickname, password);
+        bot.addListener(new SimpleCommandListener(Map.of(
+            "hello", "Hello, world!"
+        ), "!"));
+        bot.addChannel("#pydawan");
+        bot.start();
+        System.out.println("Connected");
+        Thread.sleep(5000);
+        bot.sendMessage("pydawan", "Hi!");
     }
 }

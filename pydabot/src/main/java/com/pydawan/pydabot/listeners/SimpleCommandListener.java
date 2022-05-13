@@ -9,17 +9,18 @@ import org.pircbotx.hooks.events.MessageEvent;
 
 public class SimpleCommandListener extends ListenerAdapter {
     private static final String SPLIT = " ";
-    private static final String PREFIX = "!";
+    private final String prefix;
 
     private final Function<String, String> mapping;
     
-    public SimpleCommandListener(Function<String, String> mapping) {
+    public SimpleCommandListener(Function<String, String> mapping, String prefix) {
         this.mapping = mapping;
+        this.prefix = prefix;
     }
 
-    public SimpleCommandListener(Map<String, String> map) {
-        this(map::get);
-    }           
+    public SimpleCommandListener(Map<String, String> map, String prefix) {
+        this(map::get, prefix);
+    }
 
     private Optional<String> getResponse(String command) {
         return Optional.ofNullable(mapping.apply(command));
@@ -29,7 +30,7 @@ public class SimpleCommandListener extends ListenerAdapter {
     public void onMessage(MessageEvent event) {
         String message = event.getMessage();
         String command = message.stripLeading().split(SPLIT)[0];
-        if(command.startsWith(PREFIX))
-            getResponse(command.substring(PREFIX.length())).ifPresent(event::respond);
+        if(command.startsWith(prefix))
+            getResponse(command.substring(prefix.length())).ifPresent(event::respond);
     }
 }

@@ -1,25 +1,31 @@
 package com.pydawan.pydabot;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.List;
 
-import com.pydawan.pydabot.listeners.CommandListener;
-import com.pydawan.pydabot.listeners.Moderator;
-import com.pydawan.pydabot.listeners.Pong;
-import com.pydawan.pydabot.listeners.SimpleCommandListener;
+import java.io.IOException;
+import java.util.HashSet;
+import java.util.Set;
 
 import org.json.JSONException;
-import org.json.JSONObject;
 import org.pircbotx.Configuration;
 import org.pircbotx.PircBotX;
 import org.pircbotx.exception.IrcException;
 import org.pircbotx.hooks.Listener;
 
-public class Bot implements AutoCloseable{
-    PircBotX bot;
+/**
+ * A bot that connects to a server and joins channels.
+ */
+public class Bot {
+
+    private String hostname;
+    private int port;
+    private String nickname;
+    private String password;
+
+    private Set<String> channels = new HashSet<>();
+    private Set<Listener> listeners = new HashSet<>();
+
+    private PircBotX bot;
+    private Thread botThread;
 
     /**
      * Create a new bot instance.
@@ -27,54 +33,92 @@ public class Bot implements AutoCloseable{
      * @throws JSONException
      * @throws IOException
      */
-    public Bot(String configPathStr) throws JSONException, IOException {
-        /* Create a JSONObject from a given file path */
-        Path configPath = Paths.get(configPathStr);
-        JSONObject configJson = new JSONObject(new String(Files.readAllBytes(configPath), "UTF-8"));
-        String server = configJson.getString("server");
-        List<String> channels = configJson
-                .getJSONArray("channels")
-                .toList()
-                .stream()
-                .map(Object::toString)
-                .toList();
-
-        String name = configJson.getString("name");
-        String token = configJson.getString("token");
-
-        List<Listener> listeners = List.of(
-            new Pong(),
-            new Moderator((a) -> null, (a, b) -> null),
-            new SimpleCommandListener((c) -> "Hi"),
-            new CommandListener((c) -> null)
-        );
-
-        /* Create a new PircBotX configuration */
-        Configuration config = new Configuration.Builder()
-            .setServerPassword(token)
-            .setName(name)
-            .addAutoJoinChannels(channels)
-            .addServer(server)
-            .addListeners(listeners)
-            .buildConfiguration();
-        
-        bot = new PircBotX(config);
+    public Bot(String hostname, int port, String nickname, String password) {
+        this.hostname = hostname;
+        this.port = port;
+        this.nickname = nickname;
+        this.password = password;
     }
 
+    private Configuration buildConfiguration() {
+        return new Configuration.Builder()
+                .setName(nickname)
+                .addServer(hostname, port)
+                .setServerPassword(password)
+                .addAutoJoinChannels(channels)
+                .addListeners(listeners)
+                .buildConfiguration();
+    }
+
+
     /**
-     * Connect to the IRC server and start the bot.
+     * Connects to the IRC server and start the bot.
+     * Creates a new thread for the bot.
+     * 
+     * This method should be called if the configuration is changed.
+     * 
      * @throws IOException
      * @throws IrcException
+     * @throws InterruptedException
      */
-    public void start() throws IOException, IrcException {
-        bot.startBot();
+    public void start() throws IrcException, IOException, InterruptedException {
+        close();
+
+        bot = new PircBotX(buildConfiguration());
+        botThread = new Thread(() -> {
+            try {
+                bot.startBot();
+            } catch (Exception e) {}
+        }, "Bot-Event-Loop");
+        botThread.start();
     }
 
     /**
-     * Close the bot.
+     * Closes the bot.
+     * @throws InterruptedException
      */
-    @Override
-    public void close() {
+    public void close() throws InterruptedException {
+        if(bot == null)
+            return;
+
         bot.close();
+        botThread.join();
+    }
+
+    /**
+     * Adds a listener to the bot.
+     * @param listener The listener to add.
+     */
+    public void addListener(Listener listener) {
+        listeners.add(listener);
+    }
+
+    public void removeListener(Listener listener) {
+        listeners.remove(listener);
+    }
+
+    /**
+     * Adds a channel to the bot.
+     * @param channel The channel to add.
+     */
+    public void addChannel(String channel) {
+        channels.add(channel);
+    }
+
+    /**
+     * Removes a channel from the bot.
+     * @param channel The channel to remove.
+     */
+    public void removeChannel(String channel) {
+        channels.remove(channel);
+    }
+
+    /**
+     * Sends a message to a channel.
+     * @param channel The channel to send the message to.
+     * @param message The message to send.
+     */
+    public void sendMessage(String channel, String message) {
+        bot.send().message("#"+channel, message);
     }
 }

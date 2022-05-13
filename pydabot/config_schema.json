@@ -1,0 +1,39 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://pydabot.pydawan.com/schema.json",
+    "type": "object",
+    "description": "A config file for irc bot",
+    "properties": {
+        "name": {
+            "type": "string",
+            "description": "The bot's nickname"
+        },
+        "server": {
+            "type": "string",
+            "description": "The server to connect to",
+            "default": "irc.chat.twitch.tv"
+        },
+        "port": {
+            "type": "integer",
+            "description": "The port to connect to",
+            "default": 6667
+        },
+        "channels": {
+            "type": "array",
+            "description": "The channels to join",
+            "items": {
+                "type": "string"
+            }
+        },
+        "token": {
+            "type": "string",
+            "description": "The OAuth token"
+        }
+    },
+    "required": [
+        "name",
+        "server",
+        "channels",
+        "token"
+    ]
+}
