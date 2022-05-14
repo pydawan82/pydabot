@@ -22,12 +22,12 @@ public class App {
 
         Bot bot = new Bot(hostname, port, nickname, password);
         bot.addListener(new SimpleCommandListener(Map.of(
-            "hello", "Hello, world!"
-        ), "!"));
+                "hello", "Hello, world!"), "!"));
         bot.addChannel("#pydawan");
         bot.start();
         System.out.println("Connected");
         Thread.sleep(5000);
         bot.sendMessage("pydawan", "Hi!");
+        bot.getHostname();
     }
 }
