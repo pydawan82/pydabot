@@ -9,18 +9,21 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import com.pydawan.pydabot.workers.AnnounceWorker;
+import com.pydawan.pydabot.workers.AnnouncementWorker;
 
-import org.pircbotx.Colors;
 import org.pircbotx.Configuration;
 import org.pircbotx.PircBotX;
 import org.pircbotx.exception.IrcException;
 import org.pircbotx.hooks.Listener;
 
 import lombok.Getter;
+import lombok.Setter;
+
+import static com.pydawan.pydabot.irc.IrcUtils.channelOf;
 
 /**
  * A bot that connects to a server and joins channels.
@@ -43,8 +46,18 @@ public class Bot {
     private Future<?> botFuture;
 
     private final ScheduledExecutorService taskExecutor;
-    private Future<?> announceFuture;
-    private AnnounceWorker announceWorker = new AnnounceWorker(bot);
+    private ScheduledFuture<?> announcementFuture;
+    private AnnouncementWorker announcementWorker = new AnnouncementWorker(bot);
+
+    @Getter
+    @Setter
+    private long announcementDelay = 60;
+    @Getter
+    @Setter
+    private long announcementInterval = 60;
+    @Getter
+    @Setter
+    private TimeUnit announcementUnit = TimeUnit.SECONDS;
 
     /**
      * Create a new bot instance.
@@ -105,10 +118,12 @@ public class Bot {
      */
     public void start() throws IrcException, IOException, InterruptedException {
         if (isAlive())
-            throw new BotException("Bot is already running.");
+            throw new IllegalStateException("Bot is already running.");
 
         bot = new PircBotX(buildConfiguration());
         botFuture = botExecutor.submit(this::runBot);
+
+        startAnnouncementWorker(announcementDelay, announcementInterval, announcementUnit);
     }
 
     /**
@@ -118,6 +133,7 @@ public class Bot {
         try {
             bot.startBot();
         } catch (Exception e) {
+            // Do nothing.
         }
     }
 
@@ -126,6 +142,7 @@ public class Bot {
      * bot.
      */
     private static final long MAX_SAFE_DISCONNECT_TIME = 1000L;
+    private static final TimeUnit MAX_SAFE_DISCONNECT_TIME_UNIT = TimeUnit.MILLISECONDS;
 
     /**
      * Closes the bot .
@@ -138,12 +155,14 @@ public class Bot {
      */
     public void close() throws InterruptedException, ExecutionException, TimeoutException {
         if (!isAlive())
-            throw new BotException("Bot is not running.");
+            throw new IllegalStateException("Bot is not running.");
+
+        stopAnnouncementWorker();
 
         bot.sendIRC().quitServer("");
 
         try {
-            botFuture.get(MAX_SAFE_DISCONNECT_TIME, TimeUnit.MILLISECONDS);
+            botFuture.get(MAX_SAFE_DISCONNECT_TIME, MAX_SAFE_DISCONNECT_TIME_UNIT);
         } catch (TimeoutException e) {
             bot.close();
             botFuture.get();
@@ -212,12 +231,32 @@ public class Bot {
      * @param message The message to send.
      */
     public void sendMessage(String channel, String message) {
-        bot.send().message("#" + channel, message);
+        bot.send().message(channelOf(channel), message);
     }
 
-    public void addTask(String channel) {
-        taskExecutor.scheduleAtFixedRate(() -> {
-            bot.sendIRC().message("#" + channel, "Hello");
-        }, 0, 1, TimeUnit.SECONDS);
+    /**
+     * Starts the announcement worker with the given delay.
+     * The worker will send a random Announcement every period.
+     * 
+     * @param delay  The delay before the first announcement.
+     * @param period The period between each announcement.
+     * @throws IllegalArgumentException If the period is less or equal to zero.
+     */
+    private void startAnnouncementWorker(long delay, long period, TimeUnit unit) {
+        if (announcementFuture != null && !announcementFuture.isDone())
+            throw new IllegalStateException("Announcement worker is already running.");
+
+        announcementFuture = taskExecutor.scheduleAtFixedRate(announcementWorker, delay, period, unit);
+    }
+
+    /**
+     * Stops the announcement worker.
+     */
+    private void stopAnnouncementWorker() {
+        if (announcementFuture == null)
+            return;
+
+        announcementFuture.cancel(false);
+        announcementFuture = null;
     }
 }
