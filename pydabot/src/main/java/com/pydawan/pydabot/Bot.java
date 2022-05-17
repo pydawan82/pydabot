@@ -4,7 +4,17 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
+import com.pydawan.pydabot.workers.AnnounceWorker;
+
+import org.pircbotx.Colors;
 import org.pircbotx.Configuration;
 import org.pircbotx.PircBotX;
 import org.pircbotx.exception.IrcException;
@@ -29,7 +39,12 @@ public class Bot {
     private final Set<Listener> listeners = new HashSet<>();
 
     private PircBotX bot;
-    private Thread botThread;
+    private final ExecutorService botExecutor;
+    private Future<?> botFuture;
+
+    private final ScheduledExecutorService taskExecutor;
+    private Future<?> announceFuture;
+    private AnnounceWorker announceWorker = new AnnounceWorker(bot);
 
     /**
      * Create a new bot instance.
@@ -43,6 +58,8 @@ public class Bot {
         this.port = port;
         this.nickname = nickname;
         this.password = password;
+        botExecutor = Executors.newSingleThreadExecutor();
+        taskExecutor = Executors.newSingleThreadScheduledExecutor();
     }
 
     /**
@@ -62,7 +79,7 @@ public class Bot {
      *         otherwise.
      */
     public boolean isAlive() {
-        return botThread != null && botThread.isAlive();
+        return botFuture != null && !botFuture.isDone();
     }
 
     private Configuration buildConfiguration() {
@@ -91,8 +108,7 @@ public class Bot {
             throw new BotException("Bot is already running.");
 
         bot = new PircBotX(buildConfiguration());
-        botThread = new Thread(this::runBot, "Bot-Event-Loop");
-        botThread.start();
+        botFuture = botExecutor.submit(this::runBot);
     }
 
     /**
@@ -114,17 +130,24 @@ public class Bot {
     /**
      * Closes the bot .
      * 
+     * @throws TimeoutException
+     * @throws ExecutionException
+     * 
      * @throws InterruptedException
      * @throws BotException         If the bot is not running.
      */
-    public void close() throws InterruptedException {
+    public void close() throws InterruptedException, ExecutionException, TimeoutException {
         if (!isAlive())
             throw new BotException("Bot is not running.");
 
         bot.sendIRC().quitServer("");
-        botThread.join(MAX_SAFE_DISCONNECT_TIME);
-        bot.close();
-        botThread.join();
+
+        try {
+            botFuture.get(MAX_SAFE_DISCONNECT_TIME, TimeUnit.MILLISECONDS);
+        } catch (TimeoutException e) {
+            bot.close();
+            botFuture.get();
+        }
     }
 
     /**
@@ -190,5 +213,11 @@ public class Bot {
      */
     public void sendMessage(String channel, String message) {
         bot.send().message("#" + channel, message);
+    }
+
+    public void addTask(String channel) {
+        taskExecutor.scheduleAtFixedRate(() -> {
+            bot.sendIRC().message("#" + channel, "Hello");
+        }, 0, 1, TimeUnit.SECONDS);
     }
 }
